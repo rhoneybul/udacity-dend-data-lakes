@@ -1,7 +1,8 @@
 from pyspark import SparkContext
 
 try:
-  sc = SparkContext("spark://localhost:4040", "Dev Spark")
+  sc = SparkContext("local", "Dev Spark")
+  print('connected to spark ')
 except Exception as e:
   print(f'Could not connect to the spark context. {e}')
   
