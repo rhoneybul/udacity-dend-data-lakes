@@ -101,7 +101,7 @@ def epoch_to_timestamp(e):
     Return:
     timestamp: timestamp of the ms since the epoch given as input
     """
-    return pd.to_datetime(e)
+    return 
 
 def epoch_to_datetime(e):
     """epoch_to_datetime
@@ -113,8 +113,7 @@ def epoch_to_datetime(e):
     Returns:
     datetime: datetime object for the epoch input
     """
-    return datetime.datetime.fromtimestamp(e/1000)
-
+    return 
 def process_log_data(spark, input_data, output_data):
     # get filepath to log data file
     log_data = f'{input_data}/log-data/'
@@ -131,22 +130,28 @@ def process_log_data(spark, input_data, output_data):
     df.createOrReplaceTempView("logs")
 
     # # extract columns for users table    
-    users_table = spark.sql("SELECT DISTINCT user_id, first_name, last_name, gender, level FROM logs")
+    users_table = spark.sql("SELECT DISTINCT userId as user_id, firstName as first_name, lastName as last_name, gender, level FROM logs")
     
     # # write users table to parquet files
     users_output_path=f'{output_data}/users'
-    users_table.write.parquet(users_table)
+    # users_table.write.parquet(users_output_path)
 
     # # create timestamp column from original timestamp column
-    get_timestamp = udf('CreateTimestamp', epoch_to_timestamp)
-    # df = 
-    
-    # # create datetime column from original timestamp column
-    get_datetime = udf('CreateDatetime', epoch_to_datetime)
-    # df = 
+    get_timestamp = udf(lambda x: datetime.datetime.fromtimestamp(x/1000).strftime('%Y-%m-%d %H:%M:%S'))
+    df = df.withColumn('timestamp', get_timestamp(df.ts))
     
     # # extract columns to create time table
-    # time_table = 
+    df.createOrReplaceTempView('logs')
+    time_table = spark.sql("SELECT timestamp as start_time from logs")
+    time_table = time_table.withColumn('hour', hour(time_table.start_time))
+    time_table = time_table.withColumn('day', dayofmonth(time_table.start_time))
+    time_table = time_table.withColumn('week', weekofyear(time_table.start_time))
+    time_table = time_table.withColumn('month', month(time_table.start_time))
+    time_table = time_table.withColumn('year', year(time_table.start_time))
+    time_table = time_table.withColumn('weekday', date_format(time_table.start_time, 'u'))
+    # time_table = df.create
+
+    time_table.show()
     
     # # write time table to parquet files partitioned by year and month
     # time_table
@@ -171,10 +176,10 @@ def main():
     #     process_song_data(spark, input_data, output_data)    
     # except Exception as e:
     #     logging.error(f'Could not process song data {e}')
-    try:
-        process_log_data(spark, input_data, output_data)
-    except Exception as e:
-        logging.error(f'Could not process log data {e}')
+    # try:
+    process_log_data(spark, input_data, output_data)
+    # except Exception as e:
+        # logging.error(f'Could not process log data {e}')
 
 
 if __name__ == "__main__":
