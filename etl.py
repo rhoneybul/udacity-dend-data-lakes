@@ -124,8 +124,6 @@ def process_log_data(spark, input_data, output_data):
     # filter by actions for song plays
     df = df.filter(df.page == 'NextSong')
 
-    df.show()
-
     # create a temporary view to use spark sql
     df.createOrReplaceTempView("logs")
 
@@ -134,7 +132,7 @@ def process_log_data(spark, input_data, output_data):
     
     # # write users table to parquet files
     users_output_path=f'{output_data}/users'
-    # users_table.write.parquet(users_output_path)
+    users_table.write.parquet(users_output_path)
 
     # # create timestamp column from original timestamp column
     get_timestamp = udf(lambda x: datetime.datetime.fromtimestamp(x/1000).strftime('%Y-%m-%d %H:%M:%S'))
@@ -142,23 +140,32 @@ def process_log_data(spark, input_data, output_data):
     
     # # extract columns to create time table
     df.createOrReplaceTempView('logs')
-    time_table = spark.sql("SELECT timestamp as start_time from logs")
-    time_table = time_table.withColumn('hour', hour(time_table.start_time))
-    time_table = time_table.withColumn('day', dayofmonth(time_table.start_time))
-    time_table = time_table.withColumn('week', weekofyear(time_table.start_time))
-    time_table = time_table.withColumn('month', month(time_table.start_time))
-    time_table = time_table.withColumn('year', year(time_table.start_time))
-    time_table = time_table.withColumn('weekday', date_format(time_table.start_time, 'u'))
-    # time_table = df.create
-
-    time_table.show()
+    time_table = spark.sql("SELECT ts as start_time, timestamp from logs")
+    time_table = time_table.withColumn('hour', hour(time_table.timestamp))
+    time_table = time_table.withColumn('day', dayofmonth(time_table.timestamp))
+    time_table = time_table.withColumn('week', weekofyear(time_table.timestamp))
+    time_table = time_table.withColumn('month', month(time_table.timestamp))
+    time_table = time_table.withColumn('year', year(time_table.timestamp))
+    time_table = time_table.withColumn('weekday', date_format(time_table.timestamp, 'u'))
+    time_table = time_table.drop(time_table.timestamp)
     
+    time_output_path=f'{output_data}/time'
     # # write time table to parquet files partitioned by year and month
-    # time_table
+    time_table.write.partitionBy('year', 'month').parquet(time_output_path)
 
     # # read in song data to use for songplays table
-    # song_df = 
+    song_df = spark.sql("""
+    SELECT ts as start_time, 
+            userId as user_id, 
+            level, 
+            artist, 
+            song,
+            sessionId as session_id, 
+            location, 
+            userAgent as user_agent from logs
+    """)
 
+    song_df.show()
     # # extract columns from joined song and log datasets to create songplays table 
     # songplays_table = 
 
