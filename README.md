@@ -63,6 +63,23 @@ The dimension tables are then created as follows;
 * year
 * weekday
 
+The fact table is then created, containing the plays of each song in the streaming application;
+
+*Songplays*
+
+* songplay_id (UUID) 
+* start_time 
+* user_id
+* level 
+* song_id 
+* artist_id 
+* session_id 
+* location
+* user_agent
+* timestamp (created from the integer start_time)
+* month (created from timestamp, for partitioning of the data when outputted.)
+* year(created from timestamp for partioning of the data when outputted.)
+
 ## Output
 
 Each of these tables is then written to parquet files. The output path is given as a base directory, and the files then written to sub-directories of this.
