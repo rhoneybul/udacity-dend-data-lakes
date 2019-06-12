@@ -57,7 +57,7 @@ def process_song_data(spark, input_data, output_data):
 
     """
     # get filepath to song data file
-    song_path = '{}/song-data/*/*/*/*'.format(input_data)
+    song_path = '{}/song_data/*/*/*/*'.format(input_data)
     
     schema = StructType([
         StructField("num_songs", IntegerType(), False),
@@ -130,7 +130,7 @@ def epoch_to_datetime(e):
 
 def process_log_data(spark, input_data, output_data):
     # get filepath to log data file
-    log_data = f'{input_data}/log-data/'
+    log_data = f'{input_data}/log_data/'
 
     # read log data file
     df = spark.read.json(log_data)
@@ -175,6 +175,7 @@ def process_log_data(spark, input_data, output_data):
     time_table = time_table.drop(time_table.timestamp)
     
     time_output_path=f'{output_data}/time'
+
     # # write time table to parquet files partitioned by year and month
     try:
         time_table.write.partitionBy('year', 'month').parquet(time_output_path)
@@ -207,28 +208,31 @@ def process_log_data(spark, input_data, output_data):
                                FROM song_logs logs
                                JOIN songs on logs.song = songs.title""")
 
-    songplay_df.show()
-
     # # write songplays table to parquet files partitioned by year and month
-    # songplays_table
+    songplay_df = songplay_df.withColumn('timestamp', get_timestamp(songplay_df.start_time))
+    songplay_df = songplay_df.withColumn('month', month(songplay_df.timestamp))
+    songplay_df = songplay_df.withColumn('year', year(songplay_df.timestamp))
+    
+    songplay_output_path = f'{output_data}/songplays'
 
+    try:
+        songplay_df.write.partitionBy('month', 'year').parquet(songplay_output_path)
+    except Exception as e:
+        logging.error(f'Could not write songplay df {e}')
 
 def main():
-    spark = create_spark_session(aws=False)
-    input_data = "./data/"
-    # output_data = "s3a://udacity-data-lakes/output"
-    output_data = './data/output'
+    spark = create_spark_session(aws=True)
+    input_data = "s3://udacity-dend"
+    output_data = "s3a://udacity-data-lakes/output"
     
     try:
         process_song_data(spark, input_data, output_data)    
     except Exception as e:
-        # quit()
         logging.error(f'Could not process song data {e}')
-        quit()
-    # try:
-    process_log_data(spark, input_data, output_data)
-    # except Exception as e:
-        # logging.error(f'Could not process log data {e}')
+    try:
+        process_log_data(spark, input_data, output_data)
+    except Exception as e:
+        logging.error(f'Could not process log data {e}')
 
 
 if __name__ == "__main__":
