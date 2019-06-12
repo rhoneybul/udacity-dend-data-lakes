@@ -57,12 +57,13 @@ def process_song_data(spark, input_data, output_data):
 
     """
     # get filepath to song data file
-    song_path = '{}/song-data/*/*/*'.format(input_data)
+    song_path = '{}/song-data/*/*/*/*'.format(input_data)
     
     schema = StructType([
         StructField("num_songs", IntegerType(), False),
         StructField("artist_id", StringType(), False),
         StructField("artist_latitude", FloatType(), True),
+        StructField("artist_longitude", FloatType(), True),
         StructField("artist_location", StringType(), True),
         StructField("artist_name", StringType(), True),
         StructField("song_id", StringType(), False),
@@ -74,7 +75,7 @@ def process_song_data(spark, input_data, output_data):
     # # read song data file
     logging.info("Reading song data")
     df = spark.read.json(song_path, schema, multiLine=True)
-    df.createOrReplaceTempView("songs")
+    df.createTempView("songs")
 
     # # extract columns to create songs table
     songs_table = spark.sql('SELECT DISTINCT song_id, title, artist_id, year FROM songs')
@@ -82,15 +83,27 @@ def process_song_data(spark, input_data, output_data):
     # # write songs table to parquet files partitioned by year and artist
     song_output_path = f'{output_data}/songs'
     logging.info(f'Writing song parquet files to {song_output_path}')
-    songs_table.write.partitionBy('year', 'artist_id').parquet(song_output_path)
+    try:
+        songs_table.write.partitionBy('year', 'artist_id').parquet(song_output_path)
+    except Exception as e:
+        logging.error(f'Could not write song parquet file: {e}')
 
     # # extract columns to create artists table
-    artists_table = spark.sql('SELECT DISTINCT artist_id, name, loation, latitude, longitude FROM songs')
+    artists_table = spark.sql('''SELECT artist_id, 
+                                        title as name,
+                                        artist_location as location,
+                                        artist_latitude as latitude,
+                                        artist_longitude as longitude FROM songs''')
+
+    artists_table.createTempView('artists')
     
     # # write artists table to parquet files
     artists_output_path = f'{output_data}/artists'
     logging.info(f'Writing artists parquet files to {artists_output_path}')
-    artists_table.write.parquet()
+    try:
+        artists_table.write.parquet(artists_output_path)
+    except Exception as e:
+        logging.error(f'Could not write artists parquet file: {e}')
 
 def epoch_to_timestamp(e):
     """epoch_to_timestamp
@@ -114,6 +127,7 @@ def epoch_to_datetime(e):
     datetime: datetime object for the epoch input
     """
     return 
+
 def process_log_data(spark, input_data, output_data):
     # get filepath to log data file
     log_data = f'{input_data}/log-data/'
@@ -125,21 +139,32 @@ def process_log_data(spark, input_data, output_data):
     df = df.filter(df.page == 'NextSong')
 
     # create a temporary view to use spark sql
-    df.createOrReplaceTempView("logs")
+    df.createTempView("logs")
+
+    df.show()
 
     # # extract columns for users table    
-    users_table = spark.sql("SELECT DISTINCT userId as user_id, firstName as first_name, lastName as last_name, gender, level FROM logs")
+    users_table = spark.sql("""SELECT DISTINCT userId as user_id, 
+                                               firstName as first_name,
+                                               lastName as last_name,
+                                               gender,
+                                               level FROM logs""")
     
     # # write users table to parquet files
     users_output_path=f'{output_data}/users'
-    users_table.write.parquet(users_output_path)
+    try:
+        users_table.write.parquet(users_output_path)
+    except Exception as e:
+        logging.error(f"Could not write users table: {e}")
 
     # # create timestamp column from original timestamp column
     get_timestamp = udf(lambda x: datetime.datetime.fromtimestamp(x/1000).strftime('%Y-%m-%d %H:%M:%S'))
     df = df.withColumn('timestamp', get_timestamp(df.ts))
+
+    df.createOrReplaceTempView('logs')
     
     # # extract columns to create time table
-    df.createOrReplaceTempView('logs')
+
     time_table = spark.sql("SELECT ts as start_time, timestamp from logs")
     time_table = time_table.withColumn('hour', hour(time_table.timestamp))
     time_table = time_table.withColumn('day', dayofmonth(time_table.timestamp))
@@ -151,23 +176,38 @@ def process_log_data(spark, input_data, output_data):
     
     time_output_path=f'{output_data}/time'
     # # write time table to parquet files partitioned by year and month
-    time_table.write.partitionBy('year', 'month').parquet(time_output_path)
+    try:
+        time_table.write.partitionBy('year', 'month').parquet(time_output_path)
+    except Exception as e:
+        logging.error(f"Could not write time table: {e}")
 
     # # read in song data to use for songplays table
     song_df = spark.sql("""
     SELECT ts as start_time, 
-            userId as user_id, 
-            level, 
-            artist, 
-            song,
-            sessionId as session_id, 
-            location, 
-            userAgent as user_agent from logs
-    """)
+           userId as user_id,
+           level, 
+           artist, 
+           song,
+           sessionId as session_id, 
+           location, 
+           userAgent as user_agent from logs""")
 
-    song_df.show()
+    song_df.createOrReplaceTempView('song_logs')
+
     # # extract columns from joined song and log datasets to create songplays table 
-    # songplays_table = 
+    songplay_df = spark.sql("""SELECT UUID() as songplay_id,
+                                      logs.start_time,
+                                      logs.user_id,
+                                      logs.level,
+                                      songs.song_id,
+                                      songs.artist_id,
+                                      logs.session_id,
+                                      logs.location,
+                                      logs.user_agent 
+                               FROM song_logs logs
+                               JOIN songs on logs.song = songs.title""")
+
+    songplay_df.show()
 
     # # write songplays table to parquet files partitioned by year and month
     # songplays_table
@@ -179,10 +219,12 @@ def main():
     # output_data = "s3a://udacity-data-lakes/output"
     output_data = './data/output'
     
-    # try:
-    #     process_song_data(spark, input_data, output_data)    
-    # except Exception as e:
-    #     logging.error(f'Could not process song data {e}')
+    try:
+        process_song_data(spark, input_data, output_data)    
+    except Exception as e:
+        # quit()
+        logging.error(f'Could not process song data {e}')
+        quit()
     # try:
     process_log_data(spark, input_data, output_data)
     # except Exception as e:
