@@ -15,11 +15,12 @@ config.read('dl.cfg')
 
 os.environ['AWS_ACCESS_KEY_ID']=config['AWS']['AWS_ACCESS_KEY_ID']
 os.environ['AWS_SECRET_ACCESS_KEY']=config['AWS']['AWS_SECRET_ACCESS_KEY']
+os.environ['USE_AWS']=config['USE_AWS']
 
 logging.basicConfig(level='INFO')
 
 
-def create_spark_session(aws=True):
+def create_spark_session():
     """create spark session
     Creates, and returns a spark session object. 
     If the spark session cannot be created, the process will exit. 
@@ -29,7 +30,7 @@ def create_spark_session(aws=True):
     """
     try:
         logging.info('Creating spark session.')
-        if aws:
+        if os.getenv('USE_AWS') == 'true':
             spark = SparkSession \
                         .builder \
                         .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:2.7.0") \
@@ -221,7 +222,7 @@ def process_log_data(spark, input_data, output_data):
         logging.error(f'Could not write songplay df {e}')
 
 def main():
-    spark = create_spark_session(aws=True)
+    spark = create_spark_session()
     input_data = "s3://udacity-dend"
     output_data = "s3a://udacity-data-lakes/output"
     
