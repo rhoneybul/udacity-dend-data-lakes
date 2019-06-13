@@ -27,6 +27,8 @@ The song data is then read in from the nested directories, and the schema for wh
 * duration - Float 
 * year - Integer
 
+The 'dropDuplicates' function is used for the song data, to remove duplicate songs in the json files. 
+
 The dimension tables are then created as follows;
 
 *Users* - Reflects the users in the application;

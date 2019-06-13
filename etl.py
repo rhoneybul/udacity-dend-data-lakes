@@ -75,11 +75,11 @@ def process_song_data(spark, input_data, output_data):
 
     # # read song data file
     logging.info("Reading song data")
-    df = spark.read.json(song_path, schema, multiLine=True)
+    df = spark.read.json(song_path, schema, multiLine=True).dropDuplicates()
     df.createTempView("songs")
 
     # # extract columns to create songs table
-    songs_table = spark.sql('SELECT DISTINCT song_id, title, artist_id, year FROM songs')
+    songs_table = spark.sql('SELECT song_id, title, artist_id, year FROM songs')
     
     # # write songs table to parquet files partitioned by year and artist
     song_output_path = f'{output_data}/songs'
